@@ -1,0 +1,12 @@
+app = "oscar-bot"
+primary_region = "gru"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  DATA_FILE = "/data/data.json"
+
+[[mounts]]
+  source = "oscar_data"
+  destination = "/data"
