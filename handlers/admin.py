@@ -55,12 +55,22 @@ async def setwinners(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         await update.message.reply_text(msg)
         return
 
+    llm_changes: dict[str, str] = {}
+    if matched and data.get("llm_enabled") and config.ANTHROPIC_API_KEY:
+        from llm import normalize_predictions
+        from nominees import NOMINEES
+        matched, llm_changes = normalize_predictions(matched, NOMINEES, config.ANTHROPIC_API_KEY)
+
     data["winners"].update(matched)
     save_data(data)
 
     reply = f"✅ Winners set for {len(matched)} category(ies):\n"
     for cat, winner in matched.items():
-        reply += f"  • {cat}: {winner}\n"
+        original = llm_changes.get(cat)
+        if original:
+            reply += f"  • {cat}: {winner}  ✨ (was: {original})\n"
+        else:
+            reply += f"  • {cat}: {winner}\n"
     reply += f"\n📊 Total winners recorded: {len(data['winners'])}/23"
 
     if unrecognized:

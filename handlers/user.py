@@ -141,31 +141,45 @@ async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         await update.message.reply_text("No predictions submitted yet.")
         return
 
+    winners = data.get("winners", {})
     speech_actual = data.get("speech_seconds")
-    scores_calculated = any(e.get("score") is not None for e in predictions.values())
+    has_winners = bool(winners)
+
+    def live_score(entry):
+        if not has_winners:
+            return None
+        return sum(
+            1 for cat, actual in winners.items()
+            if normalize(entry["predictions"].get(cat, "")) == normalize(actual)
+        )
 
     def sort_key(entry):
-        score = entry.get("score")
+        score = live_score(entry)
         name = entry.get("name", "")
-        if not scores_calculated:
+        if score is None:
             return (0, 0, name)
         if speech_actual is not None and entry.get("speech_guess") is not None:
             speech_diff = abs(entry["speech_guess"] - speech_actual)
         else:
             speech_diff = float("inf")
-        return (-(score or 0), speech_diff, name)
+        return (-score, speech_diff, name)
 
     ranked = sorted(predictions.values(), key=sort_key)
 
     lines = []
-    for i, entry in enumerate(ranked, 1):
+    medals = ["🥇", "🥈", "🥉"]
+    for i, entry in enumerate(ranked):
+        medal = medals[i] if i < 3 and has_winners else f"{i+1}."
         name = entry["name"]
         count = len(entry["predictions"])
-        score_str = f"{entry['score']} pts" if entry.get("score") is not None else "—"
+        score = live_score(entry)
+        score_str = f"{score} pts" if score is not None else "—"
         speech_str = ""
         if entry.get("speech_guess") is not None:
             speech_str = f" | ⏱ {entry['speech_guess']}s"
-        lines.append(f"{i}. {name}  [{score_str} | {count}/23{speech_str}]")
+        lines.append(f"{medal} {name}  [{score_str} | {count}/23{speech_str}]")
 
-    header = "🏆 Leaderboard" if scores_calculated else "📋 Participants"
+    header = "🏆 Leaderboard" if has_winners else "📋 Participants"
+    if has_winners:
+        header += f" ({len(winners)}/23 categories judged)"
     await update.message.reply_text(f"{header}\n\n" + "\n".join(lines))

@@ -1,23 +1,19 @@
-# fly.toml app configuration file generated for oscars-telegram-bot on 2026-03-12T15:55:00Z
-#
-# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
-#
-
-app = 'oscars-telegram-bot'
-primary_region = 'gru'
+app = "oscar-bot"
+primary_region = "gru"
 
 [build]
+  dockerfile = "Dockerfile"
 
-[http_service]
-  internal_port = 8080
-  force_https = true
-  auto_stop_machines = 'stop'
-  auto_start_machines = true
-  min_machines_running = 0
-  processes = ['app']
+[env]
+  DATA_FILE = "/data/data.json"
+
+[[mounts]]
+  source = "oscar_data"
+  destination = "/data"
+
+[deploy]
+  strategy = "immediate"
 
 [[vm]]
-  memory = '1gb'
-  cpu_kind = 'shared'
-  cpus = 1
-  memory_mb = 256
+  size = "shared-cpu-1x"
+  count = 1
