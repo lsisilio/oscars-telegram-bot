@@ -9,6 +9,7 @@ def _default() -> dict:
         "categories": CATEGORIES[:],
         "winners": {},
         "speech_seconds": None,
+        "llm_enabled": False,
         "predictions": {},
     }
 

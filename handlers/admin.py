@@ -3,7 +3,7 @@ import functools
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from config import ADMIN_ID
+import config
 from parser import parse_predictions, normalize
 from storage import load_data, save_data
 
@@ -11,7 +11,7 @@ from storage import load_data, save_data
 def require_admin(func):
     @functools.wraps(func)
     async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
-        if update.effective_user.id != ADMIN_ID:
+        if update.effective_user.id not in config.ADMIN_IDS:
             await update.message.reply_text("⛔ Not authorized.")
             return
         return await func(update, context)
@@ -111,7 +111,6 @@ async def scores(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     save_data(data)
 
-    # Build sorted leaderboard
     def sort_key(entry):
         score = entry.get("score", 0) or 0
         if speech_actual is not None and entry.get("speech_guess") is not None:
@@ -140,5 +139,57 @@ async def scores(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     msg = f"🏆 Final Scores ({len(winners)} categories judged)\n\n" + "\n".join(lines)
     if speech_actual is not None:
         msg += f"\n\n⏱ Actual speech duration: {speech_actual}s"
+
+    await update.message.reply_text(msg)
+
+
+@require_admin
+async def llmon(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if not config.ANTHROPIC_API_KEY:
+        await update.message.reply_text(
+            "❌ ANTHROPIC_API_KEY is not set in the environment.\n\n"
+            "Add it to your .env file or run:\n"
+            "<code>fly secrets set ANTHROPIC_API_KEY=sk-ant-...</code>",
+            parse_mode="HTML",
+        )
+        return
+
+    data = load_data()
+    data["llm_enabled"] = True
+    save_data(data)
+    await update.message.reply_text(
+        "✅ LLM normalization is now ON.\n"
+        "User predictions will be matched against official nominees using Claude."
+    )
+
+
+@require_admin
+async def llmoff(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    data = load_data()
+    data["llm_enabled"] = False
+    save_data(data)
+    await update.message.reply_text("🔕 LLM normalization is now OFF. Using fuzzy matching only.")
+
+
+@require_admin
+async def llmstatus(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    data = load_data()
+    enabled = data.get("llm_enabled", False)
+    key_set = bool(config.ANTHROPIC_API_KEY)
+
+    status = "ON ✅" if enabled else "OFF 🔕"
+    key_status = "configured ✅" if key_set else "not set ❌"
+
+    msg = (
+        f"🤖 LLM Normalization: {status}\n"
+        f"🔑 API Key: {key_status}\n\n"
+    )
+
+    if not key_set:
+        msg += "To enable: add ANTHROPIC_API_KEY to .env or Fly.io secrets, then run /llmon."
+    elif not enabled:
+        msg += "API key is ready. Run /llmon to enable normalization."
+    else:
+        msg += "Active: predictions are being normalized against the official nominees list."
 
     await update.message.reply_text(msg)

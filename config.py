@@ -4,8 +4,15 @@ from dotenv import load_dotenv
 load_dotenv()
 
 BOT_TOKEN: str = os.environ["BOT_TOKEN"]
-ADMIN_ID: int = int(os.environ["ADMIN_ID"])
+def _parse_admin_ids() -> set[int]:
+    raw = os.environ.get("ADMIN_IDS") or os.environ.get("ADMIN_ID", "")
+    return {int(x.strip()) for x in raw.split(",") if x.strip()}
+
+ADMIN_IDS: set[int] = _parse_admin_ids()
+if not ADMIN_IDS:
+    raise ValueError("Set ADMIN_IDS (comma-separated) or ADMIN_ID in your .env")
 DATA_FILE: str = os.environ.get("DATA_FILE", "data.json")
+ANTHROPIC_API_KEY: str | None = os.environ.get("ANTHROPIC_API_KEY")
 
 CATEGORIES: list[str] = [
     "Best Picture",

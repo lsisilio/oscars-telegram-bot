@@ -1,6 +1,7 @@
 from telegram import Update
 from telegram.ext import ContextTypes
 
+import config
 from parser import parse_predictions, normalize
 from storage import load_data, save_data
 
@@ -44,7 +45,6 @@ async def predict(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     # Get text after /predict command
     text = update.message.text or ""
-    # Strip the /predict (or /predict@botname) prefix
     parts = text.split(None, 1)
     if len(parts) < 2 or not parts[1].strip():
         await update.message.reply_html(_INSTRUCTIONS)
@@ -60,6 +60,13 @@ async def predict(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         msg += f"\n\n{_INSTRUCTIONS}"
         await update.message.reply_html(msg)
         return
+
+    # LLM normalization (optional layer)
+    llm_changes: dict[str, str] = {}
+    if matched and data.get("llm_enabled") and config.ANTHROPIC_API_KEY:
+        from llm import normalize_predictions
+        from nominees import NOMINEES
+        matched, llm_changes = normalize_predictions(matched, NOMINEES, config.ANTHROPIC_API_KEY)
 
     user = update.effective_user
     uid = str(user.id)
@@ -85,7 +92,11 @@ async def predict(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     # Build reply
     reply = f"✅ Saved {len(matched)} prediction(s):\n"
     for cat, pick in matched.items():
-        reply += f"  • {cat}: {pick}\n"
+        original = llm_changes.get(cat)
+        if original:
+            reply += f"  • {cat}: {pick}  ✨ (was: {original})\n"
+        else:
+            reply += f"  • {cat}: {pick}\n"
 
     if speech_guess is not None:
         reply += f"\n⏱ Speech guess: {speech_guess} seconds"
@@ -138,7 +149,6 @@ async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         name = entry.get("name", "")
         if not scores_calculated:
             return (0, 0, name)
-        # Tiebreaker: closest speech guess
         if speech_actual is not None and entry.get("speech_guess") is not None:
             speech_diff = abs(entry["speech_guess"] - speech_actual)
         else:
